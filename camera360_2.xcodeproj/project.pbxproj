@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		12D9B99D2F34FC5200D23310 /* INSCameraSDK.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 12D9B9992F34FC5200D23310 /* INSCameraSDK.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		12D9B99E2F34FC5200D23310 /* INSCameraServiceSDK.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 12D9B99A2F34FC5200D23310 /* INSCameraServiceSDK.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		12D9B99F2F34FC5200D23310 /* INSCoreMedia.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 12D9B99B2F34FC5200D23310 /* INSCoreMedia.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		12D9B9A02F34FC5200D23310 /* SSZipArchive.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 12D9B99C2F34FC5200D23310 /* SSZipArchive.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		12D9B98B2F34FC5100D23310 /* camera360_2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = camera360_2.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		12D9B9992F34FC5200D23310 /* INSCameraSDK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = INSCameraSDK.xcframework; path = camera360_2/INSCameraSDK.xcframework; sourceTree = "<group>"; };
+		12D9B99A2F34FC5200D23310 /* INSCameraServiceSDK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = INSCameraServiceSDK.xcframework; path = camera360_2/INSCameraServiceSDK.xcframework; sourceTree = "<group>"; };
+		12D9B99B2F34FC5200D23310 /* INSCoreMedia.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = INSCoreMedia.xcframework; path = camera360_2/INSCoreMedia.xcframework; sourceTree = "<group>"; };
+		12D9B99C2F34FC5200D23310 /* SSZipArchive.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = SSZipArchive.xcframework; path = camera360_2/SSZipArchive.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -28,11 +39,32 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		12D9B9A12F34FC5200D23310 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				12D9B99D2F34FC5200D23310 /* INSCameraSDK.xcframework in Embed Frameworks */,
+				12D9B99E2F34FC5200D23310 /* INSCameraServiceSDK.xcframework in Embed Frameworks */,
+				12D9B99F2F34FC5200D23310 /* INSCoreMedia.xcframework in Embed Frameworks */,
+				12D9B9A02F34FC5200D23310 /* SSZipArchive.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXGroup section */
 		12D9B9822F34FC5100D23310 = {
 			isa = PBXGroup;
 			children = (
 				12D9B98D2F34FC5100D23310 /* camera360_2 */,
+				12D9B9992F34FC5200D23310 /* INSCameraSDK.xcframework */,
+				12D9B99A2F34FC5200D23310 /* INSCameraServiceSDK.xcframework */,
+				12D9B99B2F34FC5200D23310 /* INSCoreMedia.xcframework */,
+				12D9B99C2F34FC5200D23310 /* SSZipArchive.xcframework */,
 				12D9B98C2F34FC5100D23310 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +86,7 @@
 			buildPhases = (
 				12D9B9872F34FC5100D23310 /* Sources */,
 				12D9B9882F34FC5100D23310 /* Frameworks */,
+				12D9B9A12F34FC5200D23310 /* Embed Frameworks */,
 				12D9B9892F34FC5100D23310 /* Resources */,
 			);
 			buildRules = (
@@ -255,7 +288,16 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 975VJKUXTW;
 				ENABLE_PREVIEWS = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"TO_B_SDK=1",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSBonjourServices = (
+					"_lnp._tcp",
+					"_http._tcp",
+				);
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect to your Insta360 camera on your local network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -272,6 +314,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -DTO_B_SDK=1";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -290,7 +333,16 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 975VJKUXTW;
 				ENABLE_PREVIEWS = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"TO_B_SDK=1",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSBonjourServices = (
+					"_lnp._tcp",
+					"_http._tcp",
+				);
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect to your Insta360 camera on your local network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -307,6 +359,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -DTO_B_SDK=1";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;

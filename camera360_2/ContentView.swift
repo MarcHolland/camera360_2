@@ -8,17 +8,22 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var camera = CameraController()
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, World!")
+        NavigationStack {
+            EntryView(camera: camera)
         }
-        .padding()
+        .task {
+            camera.start()
+        }
     }
 }
 
-#Preview {
-    ContentView()
+#if DEBUG
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
 }
+#endif
