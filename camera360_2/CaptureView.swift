@@ -59,7 +59,7 @@ struct CaptureView: View {
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                         .monospacedDigit()
                 }
-                Text("Recording timelapse…")
+                Text("Recording…")
                     .foregroundStyle(.secondary)
             } else {
                 Text("Ready")
@@ -132,7 +132,7 @@ struct CaptureView: View {
         do {
             try await camera.startTimelapseCaptureHighestQuality()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = describe(error)
         }
     }
 
@@ -142,7 +142,7 @@ struct CaptureView: View {
             pendingURI = uri
             showDownloadPrompt = true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = describe(error)
         }
     }
 
@@ -150,8 +150,17 @@ struct CaptureView: View {
         do {
             _ = try await camera.downloadAndExportLastRecording(uri: uri)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = describe(error)
         }
+    }
+
+    private func describe(_ error: Error) -> String {
+        if error is CameraController.CameraError {
+            return error.localizedDescription
+        }
+
+        let ns = error as NSError
+        return "\(ns.localizedDescription) (\(ns.domain) \(ns.code))"
     }
 
     private func timeString(_ duration: TimeInterval) -> String {
@@ -191,7 +200,7 @@ private struct CaptureControlButton: View {
                     .frame(width: 34, height: 34)
             }
         }
-        .accessibilityLabel(kind == .record ? "Start timelapse recording" : "Stop recording")
+        .accessibilityLabel(kind == .record ? "Start recording" : "Stop recording")
     }
 }
 

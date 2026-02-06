@@ -8,12 +8,18 @@
 import Foundation
 import Combine
 import Network
+import UIKit
 import INSCameraSDK
 import INSCameraServiceSDK
 import INSCoreMedia
 
 @MainActor
 final class CameraController: NSObject, ObservableObject {
+    private enum ActiveCaptureKind {
+        case video
+        case timelapseVideo
+    }
+
     enum CameraError: LocalizedError {
         case notConnected
         case commandFailed(String)
@@ -73,6 +79,9 @@ final class CameraController: NSObject, ObservableObject {
 
     private var permissionProbeBrowser: NWBrowser?
     private let permissionProbeQueue = DispatchQueue(label: "camera360_2.localnetwork.probe")
+
+    private var activeCaptureKind: ActiveCaptureKind?
+    private var didApplyCapturePrerequisites = false
 
     private var localNetworkSettingsPath: String {
         let appName =
@@ -223,9 +232,144 @@ final class CameraController: NSObject, ObservableObject {
         downloadProgress = nil
         exportProgress = nil
 
-        await setHighestAvailableVideoResolutionForTimelapse()
-        let timelapseOptions = await setDefaultTimelapseOptionsBestEffort()
+        await applyCapturePrerequisitesBestEffort()
 
+        do {
+            try await startVideoCapture()
+            activeCaptureKind = .video
+        } catch {
+            // Fallback for older cameras / specific modes that only support timelapse capture APIs.
+            let timelapseOptions = await setDefaultTimelapseOptionsBestEffort()
+            try await startTimelapseVideoCapture(timelapseOptions: timelapseOptions)
+            activeCaptureKind = .timelapseVideo
+        }
+
+        isRecordingTimelapse = true
+        recordingStartDate = Date()
+        lastRecordedURI = nil
+    }
+
+    private func applyCapturePrerequisitesBestEffort() async {
+        guard isConnected else { return }
+        guard !didApplyCapturePrerequisites else { return }
+        didApplyCapturePrerequisites = true
+
+        // Some newer models (X3/X4 family) require an authorization id to be set for full control.
+        // This is a best-effort attempt; failures are ignored and surfaced by later commands.
+        let options = INSCameraOptions()
+        let sdkAuthId = INSConnectionUtils.authorizationId()
+        options.authorizationId = sdkAuthId.isEmpty ? UIDevice.current.identifierForVendor?.uuidString : sdkAuthId
+        options.videoSubMode = 0
+
+        let types: [NSNumber] = [
+            NSNumber(value: INSCameraOptionsType.authorizationId.rawValue),
+            NSNumber(value: INSCameraOptionsType.videoSubMode.rawValue),
+        ]
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            cameraManager.commandManager.setOptions(options, requestOptions: nil, forTypes: types) { _, _ in
+                continuation.resume()
+            }
+        }
+
+        // Keep-alive; the SDK expects heartbeats once the socket is connected.
+        cameraManager.commandManager.sendHeartbeats(with: nil)
+    }
+
+    private func normalVideoCaptureOptions() -> INSCaptureOptions {
+        let mode = INSCaptureMode()
+        mode.mode = 1
+        let options = INSCaptureOptions()
+        options.mode = mode
+        return options
+    }
+
+    private func currentCaptureStatus() async throws -> INSCameraCaptureStatus {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<INSCameraCaptureStatus, Error>) in
+            cameraManager.commandManager.getCurrentCaptureStatus { error, status in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let status else {
+                    continuation.resume(throwing: CameraError.commandFailed("No capture status returned by camera."))
+                    return
+                }
+                continuation.resume(returning: status)
+            }
+        }
+    }
+
+    private func phoneAuthorizationStatusBestEffort() async -> INSPhoneAuthorizationStatus? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<INSPhoneAuthorizationStatus?, Never>) in
+            cameraManager.commandManager.checkAuthorization(with: nil, type: .bleConnect) { _, status in
+                continuation.resume(returning: status)
+            }
+        }
+    }
+
+    private func validateCaptureStarted(kindDescription: String) async throws {
+        // The SDK can sometimes report success before the camera UI actually transitions.
+        try? await Task.sleep(for: .milliseconds(400))
+        let first = try? await currentCaptureStatus()
+        if let first, isCapturing(status: first) {
+            return
+        }
+
+        try? await Task.sleep(for: .milliseconds(900))
+        let status = try? await currentCaptureStatus()
+        if let status, isCapturing(status: status) {
+            return
+        }
+
+        let auth = await phoneAuthorizationStatusBestEffort()
+        let authInfo: String
+        if let auth {
+            authInfo = " authorizationState=\(auth.state.rawValue) deviceId=\(auth.deviceId)"
+        } else {
+            authInfo = ""
+        }
+
+        if let status {
+            throw CameraError.commandFailed("Camera did not start \(kindDescription). status.state=\(status.state.rawValue) status.captureSubmode=\(status.captureSubmode.rawValue).\(authInfo)")
+        }
+        throw CameraError.commandFailed("Camera did not start \(kindDescription).\(authInfo)")
+    }
+
+    private func isCapturing(status: INSCameraCaptureStatus) -> Bool {
+        let state = status.state.rawValue
+        // 0 = not capture, 8 = setting new value
+        if state == 0 || state == 8 { return false }
+        return true
+    }
+
+    private func startVideoCapture() async throws {
+        let status = try? await currentCaptureStatus()
+        if let status, isCapturing(status: status) {
+            throw CameraError.commandFailed("Camera is already capturing. status.state=\(status.state.rawValue)")
+        }
+
+        let options = normalVideoCaptureOptions()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            cameraManager.commandManager.startCapture(with: options) { [weak self] error in
+                Task { @MainActor in
+                    guard let self else {
+                        continuation.resume(throwing: CameraError.notConnected)
+                        return
+                    }
+                    if let error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    continuation.resume()
+                }
+            }
+        }
+
+        try await validateCaptureStarted(kindDescription: "recording")
+    }
+
+    private func startTimelapseVideoCapture(timelapseOptions: INSTimelapseOptions) async throws {
         let startOptions = INSStartCaptureTimelapseOptions()
         startOptions.mode = .video
         startOptions.timelapseOptions = timelapseOptions
@@ -241,9 +385,6 @@ final class CameraController: NSObject, ObservableObject {
                         continuation.resume(throwing: error)
                         return
                     }
-                    self.isRecordingTimelapse = true
-                    self.recordingStartDate = Date()
-                    self.lastRecordedURI = nil
                     continuation.resume()
                 }
             }
@@ -253,6 +394,62 @@ final class CameraController: NSObject, ObservableObject {
     func stopTimelapseCapture() async throws -> String {
         guard isConnected else { throw CameraError.notConnected }
 
+        defer {
+            isRecordingTimelapse = false
+            recordingStartDate = nil
+        }
+
+        switch activeCaptureKind {
+        case .video:
+            let uri = try await stopVideoCapture()
+            lastRecordedURI = uri
+            activeCaptureKind = nil
+            return uri
+        case .timelapseVideo:
+            let uri = try await stopTimelapseVideoCapture()
+            lastRecordedURI = uri
+            activeCaptureKind = nil
+            return uri
+        case .none:
+            // Best-effort: try normal stop first, then fall back to timelapse stop.
+            do {
+                let uri = try await stopVideoCapture()
+                lastRecordedURI = uri
+                return uri
+            } catch {
+                let uri = try await stopTimelapseVideoCapture()
+                lastRecordedURI = uri
+                return uri
+            }
+        }
+    }
+
+    private func stopVideoCapture() async throws -> String {
+        let options = normalVideoCaptureOptions()
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            cameraManager.commandManager.stopCapture(with: options) { [weak self] error, videoInfo in
+                Task { @MainActor in
+                    guard let self else {
+                        continuation.resume(throwing: CameraError.notConnected)
+                        return
+                    }
+                    if let error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+
+                    guard let videoInfo else {
+                        continuation.resume(throwing: CameraError.commandFailed("No video info returned by camera."))
+                        return
+                    }
+
+                    continuation.resume(returning: videoInfo.uri)
+                }
+            }
+        }
+    }
+
+    private func stopTimelapseVideoCapture() async throws -> String {
         let stopOptions = INSStopCaptureTimelapseOptions()
         stopOptions.mode = .video
 
@@ -263,8 +460,6 @@ final class CameraController: NSObject, ObservableObject {
                         continuation.resume(throwing: CameraError.notConnected)
                         return
                     }
-                    self.isRecordingTimelapse = false
-                    self.recordingStartDate = nil
 
                     if let error {
                         continuation.resume(throwing: error)
@@ -276,7 +471,6 @@ final class CameraController: NSObject, ObservableObject {
                         return
                     }
 
-                    self.lastRecordedURI = videoInfo.uri
                     continuation.resume(returning: videoInfo.uri)
                 }
             }
@@ -408,8 +602,9 @@ final class CameraController: NSObject, ObservableObject {
         return options
     }
 
-    private func setHighestAvailableVideoResolutionForTimelapse() async {
-        let mode = INSCameraFunctionMode(functionMode: 2)
+    private func setHighestAvailableVideoResolutionForVideoRecording() async {
+        // See `INSCameraPhotographyBasic.h` comments: 7 == NormalVideo.
+        let mode = INSCameraFunctionMode(functionMode: 7)
         let optionTypes: [NSNumber] = [NSNumber(value: INSPhotographyOptionsType.videoResolution.rawValue)]
 
         let candidates: [INSVideoResolution] = [
@@ -529,10 +724,12 @@ final class CameraController: NSObject, ObservableObject {
 
     private func handleConnected() {
         updateConnectionStateFromManager()
+        Task { await applyCapturePrerequisitesBestEffort() }
     }
 
     private func handleDisconnected() {
         updateConnectionStateFromManager()
+        didApplyCapturePrerequisites = false
     }
 
     private func handleConnectionError(_ note: Notification) {
